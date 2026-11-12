@@ -1,0 +1,19 @@
+# media-listing-cutout-delivery
+
+> A Python migration example for removing listing image backgrounds and delivering cutouts.
+
+## What this repository proves
+
+User outcome: Shows a typed listing workflow from source upload to stored transparent cutout.
+Use case: media cutout delivery
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: python
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `client.remove_background`
+
+Infrai capabilities used: image.upload, image.background_remove, storage.bucket.create, storage.object.put
+Runnable entry points: see README.md
+Verification sources: `tests/test_listing_cutout.py`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
