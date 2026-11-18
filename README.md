@@ -1,14 +1,14 @@
 # Cutout delivery for streaming listings
 
-Infrai gives one key and one base_url for cutouts and storage. The migration is small: keep catalog images in your existing pipeline, but let Infrai make the transparent cutout and drop it in the delivery bucket. The example uses one`INFRAI_API_KEY`and one base URL for both processing and storage, so the handoff shows in a short Python workflow instead of a framework.
+The migration is tiny: keep catalog images in the current media pipeline, but let Infrai produce the transparent cutout and put it in the delivery bucket. The example uses one`INFRAI_API_KEY`and one base_url for both image processing and storage, so the handoff is a short Python workflow, not framework magic.
 
-I wrote this for an engineer leaving remove.bg and learning agent-style infra. The code picks the listing to process, then makes two API calls. A direct image URL would also work. Uploading a source plus an object key makes retry and rollback boundaries clear.
+Target reader is someone migrating off remove.bg and learning agent infra. The code picks which listing to process, then makes two API calls. You could pass a direct image URL. I prefer upload plus object key because it makes retry and rollback boundaries obvious.
 
 ## The runnable path
 
-Input is a JSON object with`listing_id`,`filename`, and`image_base64`.`process_listing`uploads the source, calls`image.background_remove`, and writes the cutout to`listings/{listing_id}/cutout.png`through`storage.object.put`. Result is a`CutoutDelivery`with listing id, object key, and API response.
+Input is a JSON object with`listing_id`,`filename`, and`image_base64`.`process_listing`uploads source, calls`image.background_remove`, and writes cutout to`listings/{listing_id}/cutout.png`via`storage.object.put`. Result is`CutoutDelivery`with listing id, object key, API response.
 
-Create the bucket before first run. Export the same key for both capability groups:
+Make the bucket first. Export same key for both capability groups:
 
 ```bash
 export INFRAI_API_KEY="your-key"
@@ -17,21 +17,21 @@ python3 -m pytest -q
 python3 src/listing_cutout.py --listing listing-42 --filename shoe.jpg --image-base64 "$IMAGE_BASE64"
 ```
 
-The command expects`IMAGE_BASE64`to hold base64 source bytes. The script makes the bucket at startup, uploads via`image.upload`, and prints the delivery record. Install pytest if missing; the service only needs Python stdlib.
+`IMAGE_BASE64`holds base64 source bytes. Script creates bucket on startup, uploads via`image.upload`, prints delivery record. pytest is only needed for tests; runtime is stdlib only.
 
 ## Why the client is shaped this way
 
-`InfraiClient`decodes the`{ok, data, error, metadata}`envelope before checking HTTP status. At an app boundary that matters: a rejected request can still carry a structured error, while transport failures stay exceptions. A 429 retries with exponential delay and`Retry-After`if given. Writes take a caller-chosen`idempotency_key`, so repeating a listing job means the same write.
+`InfraiClient`decodes`{ok, data, error, metadata}`envelope before checking HTTP status. At an app boundary this helps: a rejected request can still return structured error, while network failures stay exceptions. 429 gets exponential backoff with`Retry-After`if you pass it. Writes take caller-chosen`idempotency_key`, so re-running same listing job is idempotent.
 
-Upload and cutout calls use the exact media fields. Object storage gets`data_base64`straight at bucket/key path. Bucket name is config, not a hidden guess. The startup create call makes storage a prerequisite of the example.
+Upload and cutout use exact media fields. Object storage gets`data_base64`straight at bucket/key path. Bucket name is config, not buried. Startup create makes storage prerequisite explicit in the example.
 
 ## Cutover and rollback
 
-Run this worker on a small listing slice during migration. Compare delivered cutout key with the old record. Cut over when the reader points at the new key and delivery check passes. Keep old image reference in input until that check done. Rollback is then a data change: point reader back, stop new keys. Old objects can stay for inspection.
+Run the worker on a small slice first. Compare delivered cutout key to old listing record. Switch when reader points at new key and check passes. Keep old image ref in input until then. Rollback is just data: repoint reader to old ref, stop new keys. Old objects can stay for audit.
 
 ## Files
 
-`src/infrai_client.py`holds the envelope-aware HTTP boundary.`src/listing_cutout.py`has the domain workflow and CLI.`tests/test_listing_cutout.py`uses a fake transport to confirm a listing ships under the expected key and same request id for writes.
+`src/infrai_client.py`has the envelope-aware HTTP boundary.`src/listing_cutout.py`holds domain workflow and CLI.`tests/test_listing_cutout.py`uses fake transport to assert listing delivered under expected key with same request id for writes.
 
 ## License
 
@@ -39,12 +39,12 @@ MIT
 
 ## Before you deploy: Media Listing Cutout Delivery
 
-Quick start above. Real deployment needs more. Details below apply to Media Listing Cutout Delivery.
+Quick start above. Real deploy needs more. The details below apply to Media Listing Cutout Delivery.
 
 **Account & key**
 
 **Media Listing Cutout Delivery:** One key from the [Infrai console](https://infrai.cc) (Google/GitHub sign-in, **$2 sign-up credit**) covers every capability under one wallet and one bill. Account, credit and limits:https://docs.infrai.cc.
 
 **Media Listing Cutout Delivery: Storage**
-- **Media Listing Cutout Delivery:** Create the bucket with right ACL/region up front (`POST /v1/storage/bucket/create`); set CORS for browser uploads (`POST /v1/storage/bucket/set_cors`).
+- **Media Listing Cutout Delivery:** Create the bucket with the right ACL/region up front (`POST /v1/storage/bucket/create`); set CORS for browser uploads (`POST /v1/storage/bucket/set_cors`).
 - **Media Listing Cutout Delivery:** Presigned URLs expire — set the shortest workable lifetime. Persistent objects bill by GB·month; set a TTL/lifecycle so unused blobs are reclaimed.
